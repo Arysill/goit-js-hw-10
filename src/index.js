@@ -1,52 +1,94 @@
-import axios from 'axios';
-import SlimSelect from 'slim-select';
-import Notiflix from 'notiflix';
 import 'slim-select/dist/slimselect.css';
+import { Notify } from 'notiflix/build/notiflix-notify-aio';
 import { fetchBreeds, fetchCatByBreed } from './cat-api';
-const selektEl = document.querySelector('.breed-select');
-const catInfo = document.querySelector('.cat-info');
-const errorEl = document.querySelector('.error');
-const loaderEl = document.querySelector('.loader');
-axios.defaults.headers.common['x-api-key'] =
-  'live_793CeG5q67qnH6fpJBwdr6YWNaVcGC2tcdHB4T47MUXXJN1CFrX7Fw14EMbW77uI';
-axios.defaults.baseURL = 'https://api.thecatapi.com/v1/';
 
-fetchBreeds()
-  .then(responce => {
-    selektEl.hidden = false;
-    selektEl.innerHTML = responce
-      .map(({ id, name }) => {
-        return `<option class="option" value="${id}">${name}</option>`;
-      })
-      .join('');
-    new SlimSelect({
-      select: '#sing',
-      events: {
-        afterChange: newVal => {
-          loaderEl.hidden = false;
-          catInfo.innerHTML = '';
-          fetchCatByBreed(newVal[0].value)
-            .then(responce => {
-              catInfo.innerHTML = responce
-                .map(
-                  ({ url, breeds: [{ name, description, temperament }] }) => {
-                    return `<img src="${url}" alt="${name}" width="300">
-            <h3>${name}</h3>
-            <p>${description}</p>
-            <p><b>Temperament:&nbsp</b>${temperament}</p>`;
-                  }
-                )
-                .join('');
-            })
-            .catch(() => {
-              Notiflix.Notify.failure(errorEl.textContent);
-            })
-            .finally(() => (loaderEl.hidden = true));
-        },
-      },
+const bodyEl = document.querySelector('body');
+
+const refs = {
+  selectBreedEl: findRef(bodyEl.children, 'breed-select'),
+  loaderEl: findRef(bodyEl.children, 'wrapper-loader'),
+  errorEl: document.querySelector('.error'),
+  breedInfoEl: findRef(bodyEl.children, 'cat-info'),
+};
+console.log(refs.errorEl);
+hideElement(refs.errorEl, refs.selectBreedEl);
+
+window.addEventListener('load', onLoad);
+refs.selectBreedEl.addEventListener('change', onSelect);
+function onLoad() {
+  hideElement(refs.errorEl, refs.selectBreedEl);
+
+  
+  hideElement(refs.breedInfoEl);
+  refs.loaderEl.classList.remove('hidden');
+  refs.selectBreedEl.classList.add('hidden');
+  refs.breedInfoEl.classList.add('hidden'); 
+
+  fetchBreeds('/breeds')
+    .then(data => {
+      refs.selectBreedEl.innerHTML = createMarkupSelect(data);
+      new SlimSelect({
+        select: '.breed-select',
+      });
+
+      
+      hideElement(refs.loaderEl);
+      refs.breedInfoEl.classList.remove('hidden'); 
+      refs.selectBreedEl.classList.remove('hidden');
+    })
+    .catch(() => {
+      hideElement(refs.loaderEl); 
+      refs.selectBreedEl.classList.remove('hidden');
     });
-  })
-  .catch(() => {
-    Notiflix.Notify.failure(errorEl.textContent);
-  })
-  .finally(() => (loaderEl.hidden = true));
+}
+
+function onSelect(evt) {
+  
+  refs.breedInfoEl.innerHTML = ''; 
+  hideElement(refs.breedInfoEl);
+  refs.loaderEl.classList.remove('hidden');
+  refs.selectBreedEl.classList.add('hidden');
+  refs.breedInfoEl.classList.add('hidden'); 
+
+  fetchCatByBreed('images/search', evt.target.value)
+    .then(resp => {
+      refs.breedInfoEl.innerHTML = createMarkupInfo(resp[0]);
+      refs.breedInfoEl.style.display = 'flex';
+      refs.breedInfoEl.style.gap = '20px';
+
+    
+      hideElement(refs.loaderEl);
+      refs.breedInfoEl.classList.remove('hidden'); 
+      refs.selectBreedEl.classList.remove('hidden');
+    })
+    .catch(() => {
+      Notify.failure('Oops! Something went wrong! Try reloading the page!');
+      hideElement(refs.loaderEl);
+      refs.selectBreedEl.classList.remove('hidden');
+    });
+}
+
+
+function createMarkupSelect(arr) {
+  return (
+    '<option value="" disabled selected>Choose your cat...</option>' +
+    arr.map(({ id, name }) => `<option value=${id}>${name}</option>`).join('')
+  );
+}
+
+function createMarkupInfo({ url, breeds }) {
+  const { name, temperament, description } = breeds[0];
+  return `<img src="${url}" alt="${name}" width = 450>
+      <div><h2>Breed: ${name}</h2>
+      <h3>Temperament: ${temperament}</h3>
+      <h4>Description</h4>
+      <p>${description}</p></div>`;
+}
+
+function hideElement(...elems) {
+  elems.forEach(i => i.classList.toggle('hidden'));
+}
+
+function findRef(queryEl, classN) {
+  return [...queryEl].find(i => i.className === classN);
+}
